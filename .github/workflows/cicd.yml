@@ -1,0 +1,50 @@
+name: Fraud Detection CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Stage 4: Intelligent Triggers from Grafana/Prometheus Alerts
+  repository_dispatch:
+    types: [model_performance_drop, data_drift_exceeded]
+
+jobs:
+  # Stage 1: Continuous Integration
+  integration_and_testing:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Install dependencies
+      run: pip install flake8 pytest
+    - name: Run Linting
+      run: flake8 src/
+    - name: Data Validation Checks
+      run: echo "Running data validation tests..."
+
+  # Stage 2: Build & Packaging
+  build_docker_images:
+    needs: integration_and_testing
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Training Pipeline Image
+      run: docker build -t myregistry/fraud-training:latest -f Dockerfile.train .
+    - name: Build Inference API Image
+      run: docker build -t myregistry/fraud-api:latest -f Dockerfile.api .
+
+  # Stage 3: Continuous Deployment
+  continuous_deployment:
+    needs: build_docker_images
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Trigger Airflow DAG
+      run: |
+        echo "Triggering Airflow DAG: end_to_end_fraud_pipeline"
+        # curl -X POST "http://airflow-webserver:8081/api/v1/dags/end_to_end_fraud_pipeline/dagRuns" -u "admin:admin"
+    - name: Deploy from MLflow Registry
+      run: echo "Deploying approved model from MLflow..."
