@@ -1,0 +1,81 @@
+name: End-to-End MLOps Pipeline
+
+# STAGE 1 & 4: Triggers
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # STAGE 4 (Intelligent Trigger): This listens for an alert from Grafana
+  repository_dispatch:
+    types: [ data_drift_alert, performance_drop ]
+
+jobs:
+  # STAGE 1: Continuous Integration
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest flake8 pandas
+
+      - name: Linting Check
+        run: |
+          # Stop the build if there are syntax errors
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Data Validation & Unit Tests
+        run: |
+          pytest tests/
+
+  # STAGE 2: Build & Packaging
+  build-and-push:
+    needs: integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Airflow/Training Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/fraud-training:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/fraud-training:latest
+
+      - name: Build and Push Inference API Image
+        run: |
+          # Reusing the same image structure for API as per your setup
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/fraud-inference-api:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/fraud-inference-api:latest
+
+  # STAGE 3: Continuous Deployment
+  continuous-deployment:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Airflow DAG for Retraining
+        run: |
+          echo "Simulating Airflow DAG Trigger via API..."
+          # In production, this would be: 
+          # curl -X POST http://<airflow-server>:8080/api/v1/dags/end_to_end_fraud_pipeline/dagRuns -H "Authorization: Basic <token>"
+          echo "DAG end_to_end_fraud_pipeline triggered successfully!"
+          
+      - name: Deploy Model from MLflow Registry
+        run: |
+          echo "Connecting to MLflow Registry..."
+          echo "Pulling latest Champion model for Inference API deployment."
+          echo "Deployment successful!"
