@@ -1,24 +1,18 @@
 import pandas as pd
+import os
 
-def test_data_validation_rules():
-    # 1. Create a tiny mock dataset simulating your engineered data
-    mock_data = {
-        'isFraud': [0, 1, 0], 
-        'TransactionAmt': [50.0, 150.0, 25.0],
-        'card1': [1000, 2000, 3000]
-    }
-    df = pd.DataFrame(mock_data)
+def test_real_data_validation():
+    # In GitHub Actions, the code runs from the root of your repo
+    file_path = 'Data/interim/04_engineered.csv'
     
-    # 2. Perform Data Validation Checks (Stage 1 Requirement)
+    # 1. Check if the real file actually uploaded to GitHub
+    assert os.path.exists(file_path), "Real data file not found! Git did not upload it."
     
-    # Check if target column exists
+    # 2. Read your actual dataset
+    df = pd.read_csv(file_path)
+    
+    # 3. Perform real validation checks on your data
     assert 'isFraud' in df.columns, "Target column 'isFraud' is missing!"
-    
-    # Check if critical features exist
-    assert 'TransactionAmt' in df.columns, "Critical feature missing"
-    
-    # Check for invalid negative values in money
-    assert df['TransactionAmt'].min() >= 0, "Transaction amount cannot be negative"
-    
-    # Check for missing values
-    assert not df.isnull().values.any(), "Dataset contains unexpected missing values"
+    assert 'TransactionAmt' in df.columns, "Critical feature 'TransactionAmt' missing!"
+    assert df['TransactionAmt'].min() >= 0, "Found invalid negative transaction amounts!"
+    assert not df.isnull().values.any(), "Your dataset still contains missing values!"
